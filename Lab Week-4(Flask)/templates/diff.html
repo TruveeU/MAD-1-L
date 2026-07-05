@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CSV Differences</title>
+    <style>
+        body {font-family: Arial, sans-serif; background: #f4f4f9; padding: 20px;}
+        h1 {color: #333;}
+        table {width: 100%; border-collapse: collapse; margin-top: 20px;}
+        th, td {border: 1px solid #ccc; padding: 8px; text-align: left;}
+        th {background: #e0e0ff;}
+        tr:nth-child(even) {background: #fafafa;}
+    </style>
+</head>
+<body>
+<h1>Differences Between CSV Files</h1>
+{% if differences %}
+<table>
+    <thead>
+        <tr>
+            <th>Student id</th>
+            <th>Course id</th>
+            <th>Marks</th>
+            <th>Source</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for row in differences %}
+        <tr>
+            <td>{{ row['Student id'] }}</td>
+            <td>{{ row['Course id'] }}</td>
+            <td>{{ row['Marks'] }}</td>
+            <td>{{ row['_merge'] }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No differences found.</p>
+{% endif %}
+<p><a href="/" style="color:#ff6600;">Back to Home</a></p>
+</body>
+</html>

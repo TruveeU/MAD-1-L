@@ -1,64 +1,101 @@
-import matplotlib
-from flask import Flask, render_template, request, send_from_directory
-import pandas as pd
+import csv
 import matplotlib.pyplot as plt
-import numpy as np
-import os
+from flask import Flask, render_template, request
 
 app = Flask(__name__)
+
+CSV_FILE = 'data.csv'
+
+def read_csv():
+    """Read the CSV file and return a list of dictionaries.
+    Expected columns: 'Student id', 'Course id', 'Marks'
+    """
+    rows = []
+    with open(CSV_FILE, newline='') as f:
+        reader = csv.DictReader(f, skipinitialspace=True)
+        for row in reader:
+            cleaned = {
+                'Student id': row['Student id'].strip(),
+                'Course id': row['Course id'].strip(),
+                'Marks': int(row['Marks'].strip())
+            }
+            rows.append(cleaned)
+    return rows
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
     if request.method == 'GET':
         return render_template('index.html')
     elif request.method == 'POST':
-        df = pd.read_csv('./data.csv')
         id_type = request.form.get('ID')
         id_value = request.form.get('id_value')
-
-        if id_type == 'student_id' and id_value:
-            return student_data(df, int(id_value))
-        elif id_type == 'course_id' and id_value:
-            return course_data(df, int(id_value))
+        if not id_type or not id_value:
+            return render_template('error.html')
+        try:
+            id_int = int(id_value)
+        except ValueError:
+            return render_template('error.html')
+        data = read_csv()
+        if id_type == 'student_id':
+            return student_data(data, id_int)
+        elif id_type == 'course_id':
+            return course_data(data, id_int)
         else:
             return render_template('error.html')
     else:
         return render_template('error.html')
 
-def student_data(df, sid):
-    courses = df.loc[df['Student id'] == sid]
-
-    if len(courses) == 0:
+def student_data(rows, sid):
+    courses = [r for r in rows if r['Student id'] == str(sid)]
+    if not courses:
         return render_template('error.html')
+    total = sum(r['Marks'] for r in courses)
+    return render_template('student_data.html', courses=courses, total=total)
 
-    total = courses[' Marks'].sum()
-    return render_template('student_data.html', courses=courses.to_dict(orient='records'), total=total)
-
-def course_data(df, cid):
-    marks = df.loc[df[' Course id'] == cid]
-
-    if len(marks) == 0:
+def course_data(rows, cid):
+    marks = [r['Marks'] for r in rows if r['Course id'] == str(cid)]
+    if not marks:
         return render_template('error.html')
-
-    avg = marks[' Marks'].mean()
-    max_marks = marks[' Marks'].max()
+    avg = sum(marks) / len(marks)
+    max_marks = max(marks)
     export_plot(marks)
     return render_template('course_data.html', avg=avg, max_marks=max_marks)
 
-def export_plot(data):
-    freq = data[' Marks'].value_counts().sort_index()
-    x = np.array(freq.index)
-    lower_limit = (x.min() // 10) * 10
-
+def export_plot(marks_list):
+    lower = (min(marks_list) // 10) * 10
     plt.figure(figsize=(10, 6))
-    plt.bar(x, freq.values, width=1, align='center')
-    plt.xlim(lower_limit, 100)
-    plt.xticks(range(lower_limit, 101, 10))
+    plt.hist(marks_list, bins=range(lower, 101, 1), edgecolor='black')
+    plt.xlim(lower, 100)
     plt.xlabel('Marks')
     plt.ylabel('Frequency')
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.savefig('./static/bar-chart.png', dpi=300, bbox_inches='tight')
     plt.close()
 
+@app.route('/compare')
+def compare():
+    rows1 = read_csv()
+    rows2 = []
+    with open('data (1).csv', newline='') as f:
+        reader = csv.DictReader(f, skipinitialspace=True)
+        for row in reader:
+            rows2.append({
+                'Student id': row['Student id'].strip(),
+                'Course id': row['Course id'].strip(),
+                'Marks': int(row['Marks'].strip())
+            })
+    set1 = { (r['Student id'], r['Course id'], r['Marks']) for r in rows1 }
+    set2 = { (r['Student id'], r['Course id'], r['Marks']) for r in rows2 }
+    only1 = set1 - set2
+    only2 = set2 - set1
+    diffs = []
+    for sid, cid, m in only1:
+        diffs.append({'Student id': sid, 'Course id': cid, 'Marks': m, '_merge': 'left_only'})
+    for sid, cid, m in only2:
+        diffs.append({'Student id': sid, 'Course id': cid, 'Marks': m, '_merge': 'right_only'})
+    if not diffs:
+        return render_template('identical.html')
+    return render_template('diff.html', differences=diffs)
+
 if __name__ == '__main__':
-    app.run(debug=False, port=5000) 
+    app.run(debug=False, port=5000)
